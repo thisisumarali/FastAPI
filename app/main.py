@@ -1,18 +1,11 @@
 from fastapi import FastAPI, status, HTTPException, Response, Depends
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from . import models
+from . import models, schemas
 from .database import engine, get_db
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-
-
-class Post(BaseModel):
-    name: str
-    branch: str
-    published: bool = True
 
 
 @app.get("/")
@@ -22,19 +15,19 @@ def home():
 
 # POST
 @app.post("/posts", status_code=status.HTTP_201_CREATED)
-def create_post(post: Post, db: Session = Depends(get_db)):
+def create_post(post: schemas.PostCreate, db: Session = Depends(get_db)):
     new_post = models.Post(**post.model_dump())
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
-    return {"Data": new_post}
+    return new_post
 
 
 # GET ALL POSTS
 @app.get("/posts")
 def get_posts(db: Session = Depends(get_db)):
     posts = db.query(models.Post).all()
-    return {"data": posts}
+    return posts
 
 
 # GET BY ID
@@ -46,7 +39,7 @@ def get_post(id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"post with id: {id} not found."
         )
-    return {"Post": post}
+    return post
 
 
 # DELETE POST
@@ -67,7 +60,7 @@ def delete_post(id: int, db: Session = Depends(get_db)):
 
 # EDIT POST BY ID
 @app.put("/posts/{id}")
-def update_post(id: int, updated_post: Post, db: Session = Depends(get_db)):
+def update_post(id: int, updated_post: schemas.PostCreate, db: Session = Depends(get_db)):
     post_query = db.query(models.Post).filter(models.Post.id == id)
     post = post_query.first()
 
@@ -80,4 +73,4 @@ def update_post(id: int, updated_post: Post, db: Session = Depends(get_db)):
     post_query.update(updated_post.model_dump(), synchronize_session=False)
     db.commit()
 
-    return {"data": post_query.first()}
+    return post_query.first()
