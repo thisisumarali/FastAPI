@@ -89,7 +89,7 @@ def get_posts(db: Session = Depends(get_db)):
 
 @app.get('/posts/{id}')
 def get_post(id: int, db: Session = Depends(get_db)):
-    post = db.query(models.Post).filter(models.Post.id == id)
+    post = db.query(models.Post).filter(models.Post.id == id).first()
     if not post:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"post with id: {id} not found.")
@@ -98,27 +98,29 @@ def get_post(id: int, db: Session = Depends(get_db)):
 
 # DELETE POST
 @app.delete('/posts/{id}', status_code=status.HTTP_204_NO_CONTENT)
-def delete_post(id: int):
-    cursor.execute(
-        """DELETE FROM posts WHERE id = %s RETURNING *""", (str(id),))
-    delete_post = cursor.fetchone()
-    conn.commit()
-    if delete_post is None:
+def delete_post(id: int, db: Session = Depends(get_db)):
+    post = db.query(models.Post).filter(models.Post.id == id)
+
+    if post.first() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"post with id: {id} not found.")
 
+    post.delete(synchronize_session=False)
+    db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # EDIT POST BY ID
 @app.put('/posts/{id}')
-def update_post(id: int, post: Post):
-    cursor.execute(
-        """UPDATE posts SET name = %s, branch = %s, published = %s WHERE id = %s RETURNING * """, (post.name, post.branch, post.published, str(id)))
-    update_post = cursor.fetchone()
-    conn.commit()
-    if update_post is None:
+def update_post(id: int, updated_post: Post, db: Session = Depends(get_db)):
+    post_query = db.query(models.Post).filter(models.Post.id == id)
+    post = post_query.first()
+
+    if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"post with id: {id} not found.")
 
-    return {"data": update_post}
+    post_query.update(updated_post.model_dump(), synchronize_session=False)
+    db.commit()
+
+    return {"data": post_query.first()}
